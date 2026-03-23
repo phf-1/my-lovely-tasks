@@ -1,0 +1,309 @@
+openapi: 3.1.0
+info:
+  title: Todo App API
+  version: 1.0.0
+  description: Backend contract for the Todo application — authentication and task CRUD.
+
+servers:
+  - url: "{baseUrl}"
+    description: Configurable API base URL
+    variables:
+      baseUrl:
+        default: http://localhost:3000
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/signup:
+    post:
+      operationId: signUp
+      summary: Create a new user account
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthCredentials"
+      responses:
+        "201":
+          description: Account created and session returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "409":
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/signin:
+    post:
+      operationId: signIn
+      summary: Authenticate an existing user
+      security: []
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthCredentials"
+      responses:
+        "200":
+          description: Session returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/signout:
+    post:
+      operationId: signOut
+      summary: Invalidate the current session
+      tags: [Auth]
+      responses:
+        "204":
+          description: Signed out successfully
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /auth/me:
+    get:
+      operationId: getMe
+      summary: Get the currently authenticated user
+      tags: [Auth]
+      responses:
+        "200":
+          description: Current user info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /todos:
+    get:
+      operationId: listTodos
+      summary: List all todos for the authenticated user
+      tags: [Todos]
+      responses:
+        "200":
+          description: Array of todos ordered by creation date descending
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Todo"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    post:
+      operationId: createTodo
+      summary: Create a new todo
+      tags: [Todos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTodoRequest"
+      responses:
+        "201":
+          description: Todo created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "422":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /todos/{todoId}:
+    parameters:
+      - $ref: "#/components/parameters/TodoId"
+
+    patch:
+      operationId: updateTodo
+      summary: Update a todo (e.g. toggle completion)
+      tags: [Todos]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTodoRequest"
+      responses:
+        "200":
+          description: Updated todo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Todo"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Todo not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+    delete:
+      operationId: deleteTodo
+      summary: Delete a todo
+      tags: [Todos]
+      responses:
+        "204":
+          description: Todo deleted
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Todo not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token obtained from POST /auth/signin or POST /auth/signup.
+        Pass as `Authorization: Bearer <token>` header on all authenticated requests.
+
+  parameters:
+    TodoId:
+      name: todoId
+      in: path
+      required: true
+      description: UUID of the todo
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    AuthCredentials:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          description: User's email address
+        password:
+          type: string
+          format: password
+          minLength: 6
+          description: User's password (minimum 6 characters)
+
+    AuthResponse:
+      type: object
+      required: [token, user]
+      properties:
+        token:
+          type: string
+          description: JWT bearer token for subsequent requests
+        user:
+          $ref: "#/components/schemas/User"
+
+    User:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    Todo:
+      type: object
+      required: [id, text, completed, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        text:
+          type: string
+          minLength: 1
+        completed:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp
+
+    CreateTodoRequest:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+
+    UpdateTodoRequest:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 1
+        completed:
+          type: boolean
+      description: At least one field must be provided
+
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: Human-readable error message

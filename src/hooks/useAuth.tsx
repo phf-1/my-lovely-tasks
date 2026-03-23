@@ -1,4 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import {
+  apiSignIn,
+  apiSignUp,
+  apiSignOut,
+  apiGetMe,
+  setToken,
+  getToken,
+  ApiError,
+} from '@/lib/api';
 
 interface User {
   email: string;
@@ -19,48 +28,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('todo-user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+    const token = getToken();
+    if (!token) {
+      setIsLoading(false);
+      return;
     }
-    setIsLoading(false);
+
+    apiGetMe()
+      .then((u) => setUser(u))
+      .catch(() => {
+        setToken(null);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
   const signIn = async (email: string, password: string): Promise<{ error?: string }> => {
-    const users = JSON.parse(localStorage.getItem('todo-users') || '{}');
-    
-    if (!users[email]) {
-      return { error: 'No account found with this email' };
+    try {
+      const res = await apiSignIn(email, password);
+      setToken(res.token);
+      setUser(res.user);
+      return {};
+    } catch (e) {
+      if (e instanceof ApiError) return { error: e.message };
+      return { error: 'Something went wrong' };
     }
-    
-    if (users[email] !== password) {
-      return { error: 'Incorrect password' };
-    }
-    
-    const user = { email };
-    localStorage.setItem('todo-user', JSON.stringify(user));
-    setUser(user);
-    return {};
   };
 
   const signUp = async (email: string, password: string): Promise<{ error?: string }> => {
-    const users = JSON.parse(localStorage.getItem('todo-users') || '{}');
-    
-    if (users[email]) {
-      return { error: 'An account with this email already exists' };
+    try {
+      const res = await apiSignUp(email, password);
+      setToken(res.token);
+      setUser(res.user);
+      return {};
+    } catch (e) {
+      if (e instanceof ApiError) return { error: e.message };
+      return { error: 'Something went wrong' };
     }
-    
-    users[email] = password;
-    localStorage.setItem('todo-users', JSON.stringify(users));
-    
-    const user = { email };
-    localStorage.setItem('todo-user', JSON.stringify(user));
-    setUser(user);
-    return {};
   };
 
-  const signOut = () => {
-    localStorage.removeItem('todo-user');
+  const signOut = async () => {
+    try {
+      await apiSignOut();
+    } catch {
+      // sign out locally even if the server call fails
+    }
+    setToken(null);
     setUser(null);
   };
 
