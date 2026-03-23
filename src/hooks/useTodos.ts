@@ -1,59 +1,55 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from './useAuth';
+import {
+  apiListTodos,
+  apiCreateTodo,
+  apiUpdateTodo,
+  apiDeleteTodo,
+  type Todo,
+} from '@/lib/api';
 
-export interface Todo {
-  id: string;
-  text: string;
-  completed: boolean;
-  createdAt: number;
-}
+export type { Todo } from '@/lib/api';
 
 export function useTodos() {
   const { user } = useAuth();
   const [todos, setTodos] = useState<Todo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const storageKey = user ? `todos-${user.email}` : null;
+  const fetchTodos = useCallback(async () => {
+    if (!user) {
+      setTodos([]);
+      setIsLoading(false);
+      return;
+    }
+    try {
+      const data = await apiListTodos();
+      setTodos(data);
+    } catch {
+      // keep existing state on error
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
 
   useEffect(() => {
-    if (storageKey) {
-      const stored = localStorage.getItem(storageKey);
-      if (stored) {
-        setTodos(JSON.parse(stored));
-      } else {
-        setTodos([]);
-      }
-    }
-    setIsLoading(false);
-  }, [storageKey]);
+    fetchTodos();
+  }, [fetchTodos]);
 
-  const saveTodos = (newTodos: Todo[]) => {
-    if (storageKey) {
-      localStorage.setItem(storageKey, JSON.stringify(newTodos));
-    }
-    setTodos(newTodos);
+  const addTodo = async (text: string) => {
+    const created = await apiCreateTodo(text);
+    setTodos((prev) => [created, ...prev]);
   };
 
-  const addTodo = (text: string) => {
-    const newTodo: Todo = {
-      id: crypto.randomUUID(),
-      text,
-      completed: false,
-      createdAt: Date.now(),
-    };
-    saveTodos([newTodo, ...todos]);
+  const toggleTodo = async (id: string) => {
+    const existing = todos.find((t) => t.id === id);
+    if (!existing) return;
+    const updated = await apiUpdateTodo(id, { completed: !existing.completed });
+    setTodos((prev) => prev.map((t) => (t.id === id ? updated : t)));
   };
 
-  const toggleTodo = (id: string) => {
-    const newTodos = todos.map((todo) =>
-      todo.id === id ? { ...todo, completed: !todo.completed } : todo
-    );
-    saveTodos(newTodos);
-  };
-
-  const deleteTodo = (id: string) => {
-    const newTodos = todos.filter((todo) => todo.id !== id);
-    saveTodos(newTodos);
+  const deleteTodo = async (id: string) => {
+    await apiDeleteTodo(id);
+    setTodos((prev) => prev.filter((t) => t.id !== id));
   };
 
   return {
